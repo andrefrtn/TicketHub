@@ -1,0 +1,11 @@
+import type { Metadata } from "next";
+import "./globals.css";
+
+export const metadata: Metadata = {
+  title: "TicketHub — Central de suporte",
+  description: "Central de chamados e atendimento técnico.",
+};
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return <html lang="pt-BR"><body>{children}</body></html>;
+}
