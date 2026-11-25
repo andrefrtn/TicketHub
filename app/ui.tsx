@@ -202,11 +202,11 @@ export function Hub({ initial, initialView = "overview" }: { initial: Snapshot; 
   const markerOrigin = useRef<DOMRect | null>(null);
   const previousScreen = useRef({ screen, mainTab, filter, queueSelection });
 
-  function selectQueueTab(tab: Filter) {
+  function selectQueueTab(tab: Filter, status: StatusFilter = "") {
     markerOrigin.current = tab === filter ? null
       : queueTabsElement.current?.querySelector(".queue-tab-marker")?.getBoundingClientRect() ?? null;
     setFilter(tab);
-    setQueueFilter({ ...queueFilter, status: "" });
+    setQueueFilter({ ...queueFilter, status });
     setPage(0);
   }
 
@@ -257,6 +257,11 @@ export function Hub({ initial, initialView = "overview" }: { initial: Snapshot; 
 
   const critical = data.tickets.find((ticket) => ticket.priority === "Urgente" && !["Resolvido", "Fechado"].includes(ticket.status));
   const resolved = data.tickets.filter((ticket) => customer ? isFinished(ticket.status) : ticket.status === "Resolvido").length;
+  const openCount = data.tickets.filter((ticket) => !isFinished(ticket.status)).length;
+  const unreadCount = data.tickets.filter((ticket) => ticket.unreadReply && (!customer || !isFinished(ticket.status))).length;
+  const unreadTab = customer ? "open" : "all";
+  const resolvedTab = customer ? "finished" : "all";
+  const resolvedStatus = customer ? "" : "Resolvido";
   const unassigned = data.tickets.filter(waitingAgent).length;
   const visibleTabs: Filter[] = customer ? ["open", "finished"]
     : admin ? ["waitingAgent", "open", "all"] : ["waitingAgent", "open", "mine", "all"];
@@ -322,23 +327,26 @@ export function Hub({ initial, initialView = "overview" }: { initial: Snapshot; 
             navigate("tickets");
             return finish(`${ticketCode(ticket.id)} aberto com sucesso`);
           }} />}
-        <div className={view === "overview" || view === "tickets" ? "queue-screen" : undefined} hidden={staffCreate || Boolean(ticketId)}>
+        <div className={view === "overview" ? "queue-screen overview-screen" : view === "tickets" ? "queue-screen" : undefined} hidden={staffCreate || Boolean(ticketId)}>
         <header className="page-heading">
           <div><h1>{titles[view]}</h1><p>{descriptions[view]}</p></div>
           {action && <button className="button primary" onClick={() => setWindow(action.window)}><Icon name="plus" />{action.title}</button>}
         </header>
         {shellError && <p className="error" role="alert">{shellError}</p>}
         {flash && <div className="flash" role="status"><Icon name="check" />{flash}<button className="icon-button" aria-label="Dispensar aviso" onClick={() => setFlash("")}><Icon name="close" /></button></div>}
-        {view === "overview" && critical && <div className="queue-critical">
-          <Icon name="alert" />
-          <div><span>Prioridade crítica</span><strong>{critical.title}</strong></div>
-          <TicketLink id={critical.id} onOpen={openTicket} className="button outline">Abrir chamado<Icon name="chevron" /></TicketLink>
-        </div>}
+        {view === "overview" && <section className="overview-metrics" aria-label="Resumo dos chamados">
+          <OverviewMetric label="Em aberto" value={openCount} icon="inbox" selected={filter === "open" && statusFilter === ""}
+            onClick={() => selectQueueTab("open")} />
+          <OverviewMetric label="Novas respostas" value={unreadCount} icon="chat" detail={customer ? "Em chamados abertos" : undefined}
+            selected={filter === unreadTab && statusFilter === "unread"} onClick={() => selectQueueTab(unreadTab, "unread")} />
+          <OverviewMetric label={customer ? "Finalizados" : "Resolvidos"} value={resolved} icon="check"
+            selected={filter === resolvedTab && statusFilter === resolvedStatus} onClick={() => selectQueueTab(resolvedTab, resolvedStatus)} />
+        </section>}
         {(view === "overview" || view === "tickets") && (
+          <div className={view === "overview" ? "overview-content" : undefined}>
           <section className="queue" aria-label="Fila de chamados">
             {view === "overview" && <div className="queue-heading">
               <h2>{customer ? "Meus chamados" : "Fila de chamados"}</h2>
-              <button className="priority-resolved" onClick={() => navigate(customer ? "overview" : "tickets", customer ? "finished" : "all", customer ? "" : "Resolvido")}><Icon name="check" />{customer ? "Finalizados" : "Resolvidos"} <span>{resolved}</span></button>
             </div>}
             <div className="queue-filters" ref={queueTabsElement} role="group" aria-label="Filtrar chamados">
               {visibleTabs.map((tab) => <button key={tab} aria-pressed={filter === tab} onClick={() => selectQueueTab(tab)}>{customer && tab === "open" ? "Em aberto" : queueTabs[tab].label}<small>{data.tickets.filter((ticket) => queueTabs[tab].match(ticket, data.user.id)).length}</small>{filter === tab && <span className="queue-tab-marker" aria-hidden="true" />}</button>)}
@@ -349,13 +357,16 @@ export function Hub({ initial, initialView = "overview" }: { initial: Snapshot; 
                 setPage(0);
               }} />}
             </div>
-            <div ref={queueResults} className="queue-results">
+            <div ref={queueResults} id="queue-results" className="queue-results">
               <TicketList tickets={filtered.slice(currentPage * pageSize, (currentPage + 1) * pageSize)} staff={!customer} filter={filter} onOpen={openTicket} />
             </div>
             <div className="queue-total queue-pagination"><span role="status">{filtered.length} {filtered.length === 1 ? "chamado" : "chamados"}</span>
               {lastPage > 0 && <div><button className="button outline" disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)}>Anterior</button><span>{currentPage + 1} de {lastPage + 1}</span><button className="button outline" disabled={currentPage === lastPage} onClick={() => setPage(currentPage + 1)}>Próxima</button></div>}
             </div>
           </section>
+          {view === "overview" && <OverviewAside tickets={data.tickets} critical={critical} staff={!customer} onOpen={openTicket}
+            onAssistant={data.aiConfigured || data.demo ? () => navigate("assistant") : undefined} />}
+          </div>
         )}
         <div hidden={view !== "assistant"}><Assistant snapshot={data} onOpen={openTicket} refresh={refresh} /></div>
         {view === "knowledge" && <KnowledgePanel articles={data.articles} admin={admin} refresh={refresh} />}
@@ -400,6 +411,55 @@ function TicketLink({ id, onOpen, ...props }: Omit<AnchorHTMLAttributes<HTMLAnch
     event.preventDefault();
     onOpen(id);
   }} />;
+}
+
+function OverviewMetric({ label, value, icon, detail, selected, onClick }: {
+  label: string; value: number; icon: IconName; detail?: string; selected: boolean; onClick: () => void;
+}) {
+  return <button type="button" className="overview-metric" aria-pressed={selected} aria-controls="queue-results" onClick={onClick}>
+    <span className="overview-metric-icon"><Icon name={icon} /></span>
+    <strong>{value}</strong>
+    <span className="overview-metric-label">{label}</span>
+    {detail && <small>{detail}</small>}
+    {selected && <Icon name="check" />}
+  </button>;
+}
+
+function OverviewAside({ tickets, critical, staff, onOpen, onAssistant }: {
+  tickets: Ticket[]; critical?: Ticket; staff: boolean; onOpen: (id: number) => void; onAssistant?: () => void;
+}) {
+  const attention = tickets.flatMap<{ ticket: Ticket; kind: "overdue" | "unread" }>((ticket) => {
+    if (ticket.id === critical?.id) return [];
+    if (staff && isOverdue(ticket)) return [{ ticket, kind: "overdue" }];
+    return ticket.unreadReply ? [{ ticket, kind: "unread" }] : [];
+  }).sort((a, b) => Number(b.kind === "overdue") - Number(a.kind === "overdue")).slice(0, critical ? 2 : 3);
+
+  return <aside className="overview-aside" aria-label="Atalhos de atendimento">
+    <section className="panel overview-attention">
+      <h2>Precisa de atenção</h2>
+      {critical && <div className="overview-critical">
+        <span><Icon name="alert" />Prioridade crítica</span>
+        <strong>{critical.title}</strong>
+        <TicketLink id={critical.id} onOpen={onOpen} className="overview-critical-link">Abrir chamado<Icon name="arrow" /></TicketLink>
+      </div>}
+      {attention.length > 0 && <ul aria-label="Chamados em destaque">
+        {attention.map(({ ticket, kind }) => <li key={ticket.id}>
+          <TicketLink id={ticket.id} onOpen={onOpen} className="overview-alert-link">
+            <span className="overview-alert-icon" data-kind={kind}><Icon name={kind === "overdue" ? "clock" : "chat"} /></span>
+            <span><strong>{ticket.title}</strong><small>{ticketCode(ticket.id)} · {kind === "overdue" ? "SLA vencido" : "Nova resposta"}</small></span>
+            <Icon name="chevron" />
+          </TicketLink>
+        </li>)}
+      </ul>}
+      {!critical && attention.length === 0 && <p className="overview-attention-empty"><Icon name="check" />Nenhum alerta no momento.</p>}
+    </section>
+    {onAssistant && <section className="overview-assistant">
+      <span className="overview-assistant-icon"><Icon name="bot" /></span>
+      <h2>Assistente de chamados</h2>
+      <p>Descreva o problema para abrir um chamado por conversa.</p>
+      <button className="button outline" onClick={onAssistant}>Abrir assistente<Icon name="arrow" /></button>
+    </section>}
+  </aside>;
 }
 
 function TicketList({ tickets, staff, filter, onOpen }: { tickets: Ticket[]; staff: boolean; filter: Filter; onOpen: (id: number) => void }) {
@@ -558,6 +618,7 @@ function Assistant({ snapshot, onOpen, refresh }: { snapshot: Snapshot; onOpen: 
           {message.text && <p>{message.text}</p>}
           {message.ticket && <div className="chat-receipt">
             <div className="receipt-top"><span className="ticket-code">{ticketCode(message.ticket.id)}</span><Tag value={message.ticket.status} /></div>
+            <div className="chat-receipt-confirmation"><Icon name="check" />Chamado registrado</div>
             <b>{message.ticket.title}</b><span>{message.ticket.category} · Prioridade {message.ticket.priority.toLowerCase()}</span>
             <TicketLink id={message.ticket.id} onOpen={onOpen} className="chat-link">Acompanhar chamado <Icon name="arrow" /></TicketLink>
           </div>}

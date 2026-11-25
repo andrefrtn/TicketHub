@@ -150,6 +150,7 @@ export function TicketWorkspace({ id, initial, user, team, departments, template
     {error && <p className="error" role="alert">{error}</p>}
     {notice && <p className="flash ticket-notice" role="status"><Icon name="check" />{notice}</p>}
     {!data && !error && <p role="status" className="muted">Carregando chamado…</p>}
+    {ticket && <TicketProgress status={ticket.status} />}
     {data && ticket && <div className="ticket-workspace-grid">
       <div className="ticket-thread">
         {ticketAction === "finalize" && canFinalize && <section className="panel ticket-box ticket-finalization">
@@ -207,8 +208,8 @@ export function TicketWorkspace({ id, initial, user, team, departments, template
             </form>
           </div>}
           {!participates && <div className="ticket-box copy-readonly"><Icon name="people" /><p>Você acompanha este chamado em cópia, com acesso de leitura.</p></div>}
-          <section className="history ticket-history"><div className="ticket-section-title"><h2>Histórico</h2>{!participates && <ReplyBadge ticket={ticket} showUnread={false} />}</div><ol>{[...data.events].reverse().map((item) => <li key={item.id}>
-            <span className="history-icon"><Icon name={item.kind === "note" ? "shield" : item.kind === "comment" ? "chat" : "clock"} /></span>
+          <section className="history ticket-history"><div className="ticket-section-title"><h2>Histórico</h2>{!participates && <ReplyBadge ticket={ticket} showUnread={false} />}</div><ol aria-label="Eventos mais recentes primeiro">{[...data.events].reverse().map((item) => <li key={item.id} data-kind={item.kind}>
+            <span className="history-icon"><Icon name={item.kind === "note" || item.kind === "system" ? "shield" : item.kind === "comment" ? "chat" : "clock"} /></span>
             <div><div className="event-meta"><b>{item.author}</b><time dateTime={item.createdAt}>{formatDate(item.createdAt)}</time>{(item.kind === "note" || item.kind === "system") && <span className="note-label">Interno</span>}</div><p>{item.body}</p></div>
           </li>)}</ol></section>
         </section>
@@ -286,6 +287,23 @@ export function TicketWorkspace({ id, initial, user, team, departments, template
       </aside>
     </div>}
   </article>;
+}
+
+function TicketProgress({ status }: { status: Status }) {
+  const current = isFinished(status) ? 2 : status === "Aberto" ? 0 : 1;
+  const steps = [
+    "Recebido",
+    status === "Aguardando cliente" ? "Aguardando cliente" : "Em atendimento",
+    "Finalizado",
+  ];
+  return <ol className="ticket-progress" role="list" aria-label="Etapas do chamado">
+    {steps.map((label, index) => <li key={index} aria-current={index === current ? "step" : undefined} data-complete={index < current || undefined}>
+      <span className="ticket-progress-marker" aria-hidden="true">
+        {index < current || (index === 2 && current === 2) ? <Icon name="check" /> : <span />}
+      </span>
+      <span>{label}</span>
+    </li>)}
+  </ol>;
 }
 
 function Fact({ label, value }: { label: string; value: string }) {
