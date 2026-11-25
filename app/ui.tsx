@@ -322,36 +322,35 @@ export function Hub({ initial, initialView = "overview" }: { initial: Snapshot; 
             navigate("tickets");
             return finish(`${ticketCode(ticket.id)} aberto com sucesso`);
           }} />}
-        <div hidden={staffCreate || Boolean(ticketId)}>
+        <div className={view === "overview" || view === "tickets" ? "queue-screen" : undefined} hidden={staffCreate || Boolean(ticketId)}>
         <header className="page-heading">
           <div><h1>{titles[view]}</h1><p>{descriptions[view]}</p></div>
           {action && <button className="button primary" onClick={() => setWindow(action.window)}><Icon name="plus" />{action.title}</button>}
         </header>
         {shellError && <p className="error" role="alert">{shellError}</p>}
         {flash && <div className="flash" role="status"><Icon name="check" />{flash}<button className="icon-button" aria-label="Dispensar aviso" onClick={() => setFlash("")}><Icon name="close" /></button></div>}
-        {view === "overview" && <section className="priority-panel" aria-label="Prioridades de atendimento">
-          <div className="priority-ticket">
-            {critical ? <><div><span className="critical-label"><Icon name="alert" />Prioridade crítica</span><h2>{critical.title}</h2><p>{ticketCode(critical.id)} · {critical.status}</p></div>
-              <TicketLink id={critical.id} onOpen={openTicket} className="button priority-action">Abrir chamado <Icon name="chevron" /></TicketLink></>
-              : <><div><h2>Nenhum chamado crítico ativo</h2><p>{customer ? "Acompanhe suas solicitações na fila abaixo." : "Os chamados críticos em aberto aparecem aqui."}</p></div>
-                <button className="button priority-action" onClick={() => navigate("assistant")}><Icon name="bot" /> Assistente IA</button></>}
-          </div>
-          <button className="priority-resolved" onClick={() => navigate(customer ? "overview" : "tickets", customer ? "finished" : "all", customer ? "" : "Resolvido")}><span>{customer ? "Finalizados" : "Resolvidos"}</span><strong>{resolved}</strong><Icon name="chevron" /></button>
-        </section>}
+        {view === "overview" && critical && <div className="queue-critical">
+          <Icon name="alert" />
+          <div><span>Prioridade crítica</span><strong>{critical.title}</strong></div>
+          <TicketLink id={critical.id} onOpen={openTicket} className="button outline">Abrir chamado<Icon name="chevron" /></TicketLink>
+        </div>}
         {(view === "overview" || view === "tickets") && (
-          <section className={view === "tickets" ? "panel queue queue-page" : "panel queue"}>
-            {view === "overview" && <div className="section-heading"><h2>{customer ? "Meus chamados" : "Fila de chamados"}</h2></div>}
+          <section className="queue" aria-label="Fila de chamados">
+            {view === "overview" && <div className="queue-heading">
+              <h2>{customer ? "Meus chamados" : "Fila de chamados"}</h2>
+              <button className="priority-resolved" onClick={() => navigate(customer ? "overview" : "tickets", customer ? "finished" : "all", customer ? "" : "Resolvido")}><Icon name="check" />{customer ? "Finalizados" : "Resolvidos"} <span>{resolved}</span></button>
+            </div>}
             <div className="queue-filters" ref={queueTabsElement} role="group" aria-label="Filtrar chamados">
               {visibleTabs.map((tab) => <button key={tab} aria-pressed={filter === tab} onClick={() => selectQueueTab(tab)}>{customer && tab === "open" ? "Em aberto" : queueTabs[tab].label}<small>{data.tickets.filter((ticket) => queueTabs[tab].match(ticket, data.user.id)).length}</small>{filter === tab && <span className="queue-tab-marker" aria-hidden="true" />}</button>)}
             </div>
-            <div className="filters queue-toolbar"><label className="search"><Icon name="search" /><input type="search" aria-label="Buscar chamados" placeholder="Buscar chamados" value={search} onChange={(event) => { setSearch(event.target.value); setPage(0); }} /></label>
+            <div className="queue-toolbar"><label className="search"><Icon name="search" /><input type="search" aria-label="Buscar chamados" placeholder="Buscar chamados" value={search} onChange={(event) => { setSearch(event.target.value); setPage(0); }} /></label>
               {view === "tickets" && <QueueControls data={data} staff={!customer} value={queueFilter} onChange={(value) => {
                 setQueueFilter(value);
                 setPage(0);
               }} />}
             </div>
             <div ref={queueResults} className="queue-results">
-              <TicketTable tickets={filtered.slice(currentPage * pageSize, (currentPage + 1) * pageSize)} staff={!customer} onOpen={openTicket} />
+              <TicketList tickets={filtered.slice(currentPage * pageSize, (currentPage + 1) * pageSize)} staff={!customer} filter={filter} onOpen={openTicket} />
             </div>
             <div className="queue-total queue-pagination"><span role="status">{filtered.length} {filtered.length === 1 ? "chamado" : "chamados"}</span>
               {lastPage > 0 && <div><button className="button outline" disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)}>Anterior</button><span>{currentPage + 1} de {lastPage + 1}</span><button className="button outline" disabled={currentPage === lastPage} onClick={() => setPage(currentPage + 1)}>Próxima</button></div>}
@@ -403,15 +402,29 @@ function TicketLink({ id, onOpen, ...props }: Omit<AnchorHTMLAttributes<HTMLAnch
   }} />;
 }
 
-function TicketTable({ tickets, staff, onOpen }: { tickets: Ticket[]; staff: boolean; onOpen: (id: number) => void }) {
+function TicketList({ tickets, staff, filter, onOpen }: { tickets: Ticket[]; staff: boolean; filter: Filter; onOpen: (id: number) => void }) {
   if (!tickets.length) return <div className="empty"><span><Icon name="inbox" /></span><b>Nenhum chamado nesta seleção</b><p>Experimente outra aba ou ajuste os filtros.</p></div>;
-  return <div className="table-scroll ticket-table-scroll"><table className="ticket-table" role="table" aria-label="Chamados"><thead role="rowgroup"><tr role="row"><th role="columnheader" scope="col">Chamado</th><th role="columnheader" scope="col">Situação</th><th role="columnheader" className="updated-column" scope="col">Atualização</th><th role="columnheader" aria-label="Detalhes" scope="col" /></tr></thead>
-    <tbody role="rowgroup">{tickets.map((ticket) => <tr key={ticket.id} role="row" className={ticket.unreadReply ? "ticket-row-unread" : undefined}>
-      <td className="ticket-subject" role="cell"><TicketLink id={ticket.id} onOpen={onOpen} className="ticket-link"><b>{ticket.title}</b><span className="table-subtitle">{ticketCode(ticket.id)}{!staff && !ticket.viewerOwns ? " · Em cópia" : ""}</span></TicketLink></td>
-      <td className="ticket-state" role="cell"><div className="ticket-tags"><Tag value={ticket.status === "Aberto" && ticket.assigneeId === null ? "Não atribuído" : ticket.status} />{ticket.unreadReply && <ReplyBadge ticket={ticket} compact />}{staff && isOverdue(ticket) && <Tag value="SLA vencido" />}</div></td>
-      <td className="updated-column table-date" role="cell">{formatDate(ticket.updatedAt)}</td>
-      <td className="table-arrow" role="cell"><TicketLink id={ticket.id} onOpen={onOpen} className="icon-button" tabIndex={-1} aria-label={`Abrir ${ticketCode(ticket.id)}`}><Icon name="chevron" /></TicketLink></td>
-    </tr>)}</tbody></table></div>;
+  return <ul className="ticket-list" role="list" aria-label="Chamados">
+    {tickets.map((ticket) => {
+      const unassigned = ticket.status === "Aberto" && ticket.assigneeId === null;
+      return <li key={ticket.id} className="ticket-list-item">
+        <TicketLink id={ticket.id} onOpen={onOpen} className={ticket.unreadReply ? "ticket-link ticket-unread" : "ticket-link"}>
+          <span className="ticket-subject">
+            <strong>{ticket.title}</strong>
+            <span className="ticket-meta">
+              <span className="ticket-code">{ticketCode(ticket.id)}</span>
+              {(!unassigned || filter !== "waitingAgent") && <span>{unassigned && staff ? "Não atribuído" : ticket.status}</span>}
+              {!staff && !ticket.viewerOwns && <span>Em cópia</span>}
+              {ticket.unreadReply && <ReplyBadge ticket={ticket} compact />}
+              {staff && isOverdue(ticket) && <span className="ticket-overdue">SLA vencido</span>}
+            </span>
+          </span>
+          <time className="ticket-updated" dateTime={ticket.updatedAt} title="Última atualização">{formatDate(ticket.updatedAt)}</time>
+          <Icon name="chevron" />
+        </TicketLink>
+      </li>;
+    })}
+  </ul>;
 }
 
 function CreateDialog({ onClose, onDone }: { onClose: () => void; onDone: (ticket: Ticket) => Promise<void> }) {
