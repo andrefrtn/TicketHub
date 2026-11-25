@@ -269,6 +269,7 @@ export async function POST(request: NextRequest) {
       if (result === "missing") return fail("Chamado não encontrado", 404);
       if (result === "forbidden") return fail("O chamado está atribuído a outro técnico", 403);
       if (result === "solution") return fail("Registre a solução em pelo menos 8 caracteres");
+      if (result === "finished") return fail("Este chamado já foi finalizado", 409);
       return result === "ok" ? ok({ success: true }) : fail("Não foi possível finalizar o chamado");
     }
     case "reopen": {

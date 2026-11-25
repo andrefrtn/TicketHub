@@ -327,8 +327,8 @@ textarea { resize: vertical; }
 .ticket-properties { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
 .ticket-properties .edit-ticket { margin-top: 8px; padding: 8px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .ticket-properties .edit-ticket select { padding-inline: 6px; }
-.ticket-properties summary, .ticket-reopen summary { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-weight: 700; }
-.ticket-properties[open] > summary svg, .ticket-reopen[open] > summary svg { transform: rotate(180deg); }
+.ticket-properties summary { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-weight: 700; }
+.ticket-properties[open] > summary svg { transform: rotate(180deg); }
 .ticket-unavailable { display: grid; justify-items: start; gap: 16px; }
 .reply-badge { display: inline-flex; align-items: center; gap: 5px; width: fit-content; border-radius: 5px; background: var(--surface); color: var(--secondary); padding: 2px 6px; font-size: 12px; line-height: 1.35; font-weight: 650; }
 .reply-badge.unread { color: var(--green-ink); background: var(--green); }
@@ -434,7 +434,7 @@ textarea { resize: vertical; }
   .ticket-workspace-actions { width: 100%; }
   .ticket-workspace-actions .button { min-height: 44px; flex-grow: 1; }
   .ticket-back { min-height: 44px; }
-  .ticket-properties summary, .ticket-reopen summary { min-height: 44px; }
+  .ticket-properties summary { min-height: 44px; }
   .ticket-route-user { font-size: 0; }
   .report-filters { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
   .report-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -473,7 +473,7 @@ textarea { resize: vertical; }
 @media (max-width: 420px) {
   .topbar .brand { margin-right: auto; }
   .topbar .workspace { display: none; }
-  .ticket-finalization .form-actions { flex-wrap: wrap; }
+  :is(.ticket-finalization, .ticket-reopen) .form-actions { flex-wrap: wrap; }
 }
 @media (prefers-reduced-motion: no-preference) {
   .queue-filters small { transition: background-color 180ms var(--ease), color 180ms var(--ease); }

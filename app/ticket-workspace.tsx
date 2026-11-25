@@ -25,11 +25,13 @@ export function TicketWorkspace({ id, initial, user, team, departments, template
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  const [finalizing, setFinalizing] = useState(false);
+  const [ticketAction, setTicketAction] = useState<"finalize" | "reopen" | null>(null);
   const [internal, setInternal] = useState(false);
   const [reply, setReply] = useState("");
   const [note, setNote] = useState("");
   const solutionField = useRef<HTMLTextAreaElement>(null);
+  const reopenField = useRef<HTMLTextAreaElement>(null);
+  const reopenButton = useRef<HTMLButtonElement>(null);
   const heading = useRef<HTMLHeadingElement>(null);
   const detailRequest = useRef(0);
   const seenReply = useRef(0);
@@ -78,7 +80,10 @@ export function TicketWorkspace({ id, initial, user, team, departments, template
 
   const ready = Boolean(data);
   useEffect(() => { if (ready) heading.current?.focus({ preventScroll: true }); }, [ready]);
-  useEffect(() => { if (finalizing) solutionField.current?.focus(); }, [finalizing]);
+  useEffect(() => {
+    if (ticketAction === "finalize") solutionField.current?.focus();
+    if (ticketAction === "reopen") reopenField.current?.focus();
+  }, [ticketAction]);
 
   async function change(action: string, fields: Record<string, unknown>, form?: HTMLFormElement) {
     setBusy(true);
@@ -104,7 +109,7 @@ export function TicketWorkspace({ id, initial, user, team, departments, template
   function finalize(resolution?: FormDataEntryValue | null) {
     void change("finalize", { resolution }).then((saved) => {
       if (saved) {
-        setFinalizing(false);
+        setTicketAction(null);
         setNotice("Chamado finalizado");
       }
     });
@@ -116,7 +121,8 @@ export function TicketWorkspace({ id, initial, user, team, departments, template
   const participates = Boolean(staff || ticket?.viewerOwns);
   const canEdit = ticket && (user.role === "admin" || (staff && ticket.assigneeId === user.id));
   const canClaim = ticket && !finished && user.role === "tecnico" && ticket.assigneeId === null;
-  const canFinalize = ticket && ticket.status !== "Fechado" && (canEdit || (user.role === "tecnico" && ticket.assigneeId === null));
+  const canFinalize = ticket && !finished && (canEdit || canClaim);
+  const canReopen = finished && (canEdit || (!staff && participates));
 
   return <article className="ticket-workspace">
     <Link href="/?view=chamados" className="ticket-back" onClick={onBack ? (event) => {
@@ -129,12 +135,16 @@ export function TicketWorkspace({ id, initial, user, team, departments, template
       <div><div className="detail-tags"><span className="ticket-code">{ticketCode(id)}</span>{ticket && <><Tag value={ticket.status} /><Tag value={ticket.priority} />{!participates && <Tag value="Em cópia" />}</>}</div>
         <h1 ref={heading} tabIndex={-1}>{ticket?.title ?? "Detalhes do chamado"}</h1></div>
       {ticket && <div className="ticket-workspace-actions">
-        {canFinalize && <button className="button primary ticket-finalize" disabled={busy || finalizing} onClick={() => {
-          if (ticket.status === "Resolvido" && ticket.resolution) finalize();
-          else { setError(""); setFinalizing(true); }
+        {canFinalize && <button className="button primary ticket-finalize" disabled={busy || ticketAction === "finalize"} onClick={() => {
+          setError("");
+          setTicketAction("finalize");
         }}><Icon name="check" />Finalizar chamado</button>}
         {canClaim && <button className="button outline" disabled={busy} onClick={() => void change("update", { status: "Em atendimento", priority: ticket.priority, assigneeId: user.id })}>Assumir chamado</button>}
-        {!staff && participates && ticket.status === "Resolvido" && <button className="button primary" disabled={busy} onClick={() => void change("confirmResolution", {})}><Icon name="check" />Confirmar solução</button>}
+        {canReopen && <button ref={reopenButton} className="button primary" disabled={busy} aria-expanded={ticketAction === "reopen"} onClick={() => {
+          setError("");
+          setTicketAction("reopen");
+          reopenField.current?.focus();
+        }}>Reabrir chamado</button>}
       </div>}
     </header>
     {error && <p className="error" role="alert">{error}</p>}
@@ -142,13 +152,35 @@ export function TicketWorkspace({ id, initial, user, team, departments, template
     {!data && !error && <p role="status" className="muted">Carregando chamado…</p>}
     {data && ticket && <div className="ticket-workspace-grid">
       <div className="ticket-thread">
-        {finalizing && canFinalize && <section className="panel ticket-box ticket-finalization">
+        {ticketAction === "finalize" && canFinalize && <section className="panel ticket-box ticket-finalization">
           <h2>Finalizar atendimento</h2>
           {ticket.assigneeId === null && user.role === "tecnico" && <p>Ao finalizar, você ficará como responsável pelo chamado.</p>}
           <form className="form-stack" onSubmit={(event) => { event.preventDefault(); finalize(new FormData(event.currentTarget).get("resolution")); }}>
             <label>Solução<textarea ref={solutionField} name="resolution" rows={4} minLength={8} maxLength={2000} required placeholder="Descreva o que resolveu o problema" /></label>
-            <div className="form-actions"><button type="button" className="button outline" disabled={busy} onClick={() => setFinalizing(false)}>Cancelar</button>
+            <div className="form-actions"><button type="button" className="button outline" disabled={busy} onClick={() => setTicketAction(null)}>Cancelar</button>
               <button className="button primary ticket-finalize" disabled={busy}>{busy ? "Finalizando…" : "Confirmar finalização"}</button></div>
+          </form>
+        </section>}
+        {ticketAction === "reopen" && canReopen && <section className="panel ticket-box ticket-reopen">
+          <h2>Reabrir atendimento</h2>
+          <form className="form-stack" onSubmit={(event) => {
+            event.preventDefault();
+            const reason = new FormData(event.currentTarget).get("reason");
+            void change("reopen", { reason }).then((saved) => {
+              if (!saved) return;
+              setTicketAction(null);
+              setNotice("Chamado reaberto");
+              heading.current?.focus({ preventScroll: true });
+            });
+          }}>
+            <label>Motivo<textarea ref={reopenField} name="reason" rows={3} minLength={5} maxLength={1000} required /></label>
+            <div className="form-actions">
+              <button type="button" className="button outline" disabled={busy} onClick={() => {
+                setTicketAction(null);
+                reopenButton.current?.focus();
+              }}>Cancelar</button>
+              <button className="button primary" disabled={busy}>{busy ? "Reabrindo…" : "Confirmar reabertura"}</button>
+            </div>
           </form>
         </section>}
         <section className="panel ticket-conversation">
@@ -180,14 +212,6 @@ export function TicketWorkspace({ id, initial, user, team, departments, template
             <div><div className="event-meta"><b>{item.author}</b><time dateTime={item.createdAt}>{formatDate(item.createdAt)}</time>{(item.kind === "note" || item.kind === "system") && <span className="note-label">Interno</span>}</div><p>{item.body}</p></div>
           </li>)}</ol></section>
         </section>
-        {finished && (canEdit || (!staff && participates)) && <details className="panel ticket-box ticket-reopen"><summary>Reabrir chamado <Icon name="down" /></summary>
-          <form className="form-stack detail-action" onSubmit={(event) => {
-            event.preventDefault();
-            const form = event.currentTarget;
-            void change("reopen", { reason: new FormData(form).get("reason") }, form);
-          }}><label>Motivo<textarea name="reason" rows={2} minLength={5} maxLength={1000} required /></label>
-            <button className="button outline" disabled={busy}>Reabrir chamado</button></form>
-        </details>}
         {finished && !staff && participates && <section className="panel ticket-box"><h2>Avaliação do atendimento</h2>
           {ticket.rating !== null ? <p>Nota registrada: <b>{ticket.rating}/5</b></p> :
             <form className="form-stack detail-action" onSubmit={(event) => {
@@ -282,8 +306,8 @@ function TicketProperties({ ticket, user, team, departments, busy, onSave }: {
       department: user.role === "admin" ? fields.get("department") || null : undefined, resolution: fields.get("resolution"),
     });
   }}>
-    <label>Status<select name="status" value={status} onChange={(event) => setStatus(event.target.value as Status)}>
-      {statuses.filter((item) => !finished || isFinished(item)).map((item) => <option key={item}>{item}</option>)}</select></label>
+    {!finished && <label>Status<select name="status" value={status} onChange={(event) => setStatus(event.target.value as Status)}>
+      {statuses.map((item) => <option key={item}>{item}</option>)}</select></label>}
     <label>Prioridade<select name="priority" defaultValue={ticket.priority}>{priorities.map((item) => <option key={item} value={item}>{item === "Urgente" ? "Crítica" : item}</option>)}</select></label>
     {user.role === "admin" && <>
       <label>Responsável<select name="assigneeId" defaultValue={ticket.assigneeId ?? ""}><option value="">Sem responsável</option>

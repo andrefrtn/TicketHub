@@ -414,7 +414,7 @@ export function updateTicket(user: Person, id: number, patch: TicketChanges | { 
       (changes.assigneeId !== null && changes.assigneeId !== user.id) ||
       (current.assigneeId === null && changes.assigneeId !== user.id)
     ))) return "forbidden";
-    if (finalizing && current.status === "Fechado") return "ok";
+    if (finalizing && isFinished(current.status)) return current.status === "Fechado" ? "ok" : "finished";
     const assignee = changes.assigneeId === null ? null : db.prepare("SELECT name,active FROM people WHERE id=? AND role='tecnico' AND (is_demo=0 OR ?=1)").get(changes.assigneeId, Number(demo));
     if (changes.assigneeId !== null && (!assignee || (!assignee.active && changes.assigneeId !== current.assigneeId))) return "invalid";
     const changingDepartment = changes.department !== undefined && changes.department !== current.department;
@@ -424,7 +424,7 @@ export function updateTicket(user: Person, id: number, patch: TicketChanges | { 
     const finished = isFinished(changes.status);
     const wasFinished = isFinished(current.status);
     if (wasFinished && !finished) return "reopen";
-    if (finished && (!wasFinished || (finalizing && !current.resolution)) && !changes.resolution) return "solution";
+    if (finished && !wasFinished && !changes.resolution) return "solution";
     const newSolution = finished && !current.resolution ? changes.resolution : undefined;
 
     const log = [];
