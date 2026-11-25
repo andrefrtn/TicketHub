@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { field, interpret, parseDraft, text } from "@/lib/assistant";
+import { AssistantQuotaError, assistantProvider, field, interpret, parseDraft, text } from "@/lib/assistant";
 import { attachmentLimits, categories, priorities, roles, statuses, ticketCopyLimit } from "@/lib/model";
 import { authenticate, auditLog, changePassword, changeTicketCopy, comment, confirmResolution, createCustomer, createOrganization, createPerson, createTicket, currentUser, demo, demoSession, detail, editCustomer, editOrganization, endSession, existingTicket, markTicketRead, rateTicket, readAttachment, reopenTicket, requestPasswordReset, resetPassword, saveContent, saveDepartment, savePolicy, sessionCookie, sessionSeconds, setAccountActive, snapshot, updateTicket } from "@/lib/store";
 
@@ -211,14 +211,20 @@ export async function POST(request: NextRequest) {
       if (!report || !key) return fail("Escreva um relato de até 3.000 caracteres");
       const saved = existingTicket(user, key);
       if (saved) return ok({ ticket: saved });
-      if (!process.env.OPENAI_API_KEY && !demo) return fail("Assistente indisponível. Abra um chamado pelo formulário", 503);
+      const provider = assistantProvider();
+      if (!provider && !demo) return fail("Assistente indisponível. Abra um chamado pelo formulário", 503);
       if (rateLimited(`assistant:${user.id}`, 8)) return fail("Aguarde um minuto para enviar outro relato", 429);
       try {
-        const result = await interpret(report, process.env.OPENAI_API_KEY);
+        const result = await interpret(report);
         if ("question" in result) return ok(result);
         return ok({ ticket: createTicket(user, result.draft, "assistente", key) });
-      } catch {
-        return fail("O assistente está indisponível no momento. Tente novamente ou use o formulário", 502);
+      } catch (reason) {
+        if (reason instanceof AssistantQuotaError) {
+          return fail("O assistente atingiu o limite de uso. Tente mais tarde ou abra o chamado pelo formulário", 429);
+        }
+        return fail(provider === "ollama"
+          ? "A triagem local falhou. Confira se o Ollama está em execução ou abra o chamado pelo formulário"
+          : "O assistente está indisponível no momento. Tente novamente ou use o formulário", 502);
       }
     }
     case "comment": {

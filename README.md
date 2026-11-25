@@ -52,7 +52,31 @@ A ponte e a entrega real dependem do provedor escolhido. As notas internas não 
 
 Em **Assistente**, descreva o ocorrido. A triagem pode pedir mais detalhes. Quando o relato está completo, o servidor grava o chamado com título, categoria, prioridade e descrição e devolve o número para acompanhamento.
 
-Por padrão, a demonstração oferece triagem simulada por regras locais. Para habilitar o modelo, crie `.env.local` a partir de `.env.example`, preencha `OPENAI_API_KEY` e reinicie o servidor. A chave fica no servidor e `OPENAI_MODEL` permite trocar o modelo. Com a integração ativa, o conteúdo do relato é enviado à OpenAI para classificação. Use relatos fictícios ao apresentar o projeto.
+Por padrão, a demonstração oferece triagem simulada por regras locais. Para usar o GPT-OSS 20B na nuvem, crie uma chave no [console da Groq](https://console.groq.com/keys) e configure o arquivo `.env.local` na raiz do projeto.
+
+```env
+TICKETHUB_AI_PROVIDER=groq
+GROQ_API_KEY=sua_chave
+```
+
+Reinicie o servidor Next.js. O Assistente IA exibe **GroqCloud**. O servidor envia o texto do relato à Groq para classificação. Para demonstrar o projeto, use relatos fictícios. Consulte os [limites do plano gratuito](https://console.groq.com/docs/rate-limits).
+
+Para usar o Qwen3 com o Ollama, instale e abra o Ollama na mesma máquina que executa o TicketHub. Baixe o modelo com:
+
+```powershell
+ollama pull qwen3:4b-instruct
+```
+
+Configure o arquivo `.env.local` na raiz do projeto e reinicie o servidor Next.js.
+
+```env
+TICKETHUB_AI_PROVIDER=ollama
+OLLAMA_MODEL=qwen3:4b-instruct
+```
+
+O Assistente IA exibe **Modelo local** e envia os relatos ao Ollama em `127.0.0.1:11434`. Esse modo usa apenas o Ollama, mesmo se houver uma chave da OpenAI disponível.
+
+Para usar a API da OpenAI, deixe `TICKETHUB_AI_PROVIDER` sem valor e configure `OPENAI_API_KEY`. A chave fica no servidor, e `OPENAI_MODEL` permite trocar o modelo. Nesse modo, o relato é enviado à OpenAI para classificação.
 
 ## Usar contas próprias
 

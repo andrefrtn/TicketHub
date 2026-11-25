@@ -2,6 +2,7 @@ import { createHash, randomBytes, scryptSync, timingSafeEqual } from "node:crypt
 import { mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { DatabaseSync } from "node:sqlite";
+import { assistantProvider } from "./assistant";
 import { demoAccounts, isFinished, ticketCode, ticketCopyLimit, ticketHref, type Article, type Attachment, type Customer, type CustomerFields, type Department, type Draft, type Event, type Organization, type Person, type Priority, type ReplyTemplate, type Role, type SlaPolicy, type Snapshot, type StaffTicketFields, type Ticket, type TicketDetail } from "./model";
 import { createOperationsTables, initializeOperations, operationColumns } from "./operations-schema";
 
@@ -187,6 +188,7 @@ const ticketQuery = `SELECT t.id,t.title,t.description,t.priority,t.category,t.s
 
 export function snapshot(user: Person): Snapshot {
   const db = database();
+  const aiProvider = assistantProvider();
   if (user.role !== "cliente") escalateOverdue(db, user.id);
   const tickets = user.role === "cliente"
     ? db.prepare(`${ticketQuery} WHERE ${customerScope} ORDER BY t.updated_at DESC,t.id DESC`).all(user.id, user.email)
@@ -203,7 +205,7 @@ export function snapshot(user: Person): Snapshot {
     customers: customers.map((row) => ({ ...row, active: Boolean(row.active) }) as Customer), organizations: organizations.map((row) => ({ ...row }) as Organization),
     policies: user.role === "cliente" ? [] : listPolicies(db),
     articles: db.prepare("SELECT * FROM articles WHERE published=1 OR ?='admin' ORDER BY title").all(user.role).map((row) => ({ ...row, published: Boolean(row.published) }) as Article),
-    aiConfigured: Boolean(process.env.OPENAI_API_KEY), demo,
+    aiConfigured: Boolean(aiProvider), aiProvider, demo,
   };
 }
 

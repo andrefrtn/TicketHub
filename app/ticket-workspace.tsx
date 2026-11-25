@@ -26,6 +26,7 @@ export function TicketWorkspace({ id, initial, user, team, departments, template
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [ticketAction, setTicketAction] = useState<"finalize" | "reopen" | null>(null);
+  const [showDetails, setShowDetails] = useState(false);
   const [internal, setInternal] = useState(false);
   const [reply, setReply] = useState("");
   const [note, setNote] = useState("");
@@ -186,9 +187,19 @@ export function TicketWorkspace({ id, initial, user, team, departments, template
         </section>}
         <section className="panel ticket-conversation">
           <div className="ticket-box ticket-report"><h2>Relato inicial</h2><p>{ticket.description}</p></div>
-          {ticket.resolution && <div className="ticket-box ticket-resolved-copy"><h2><Icon name="check" />Solução registrada</h2><p>{ticket.resolution}</p></div>}
-          {participates && <div className="ticket-box">
+          <section className="history ticket-history">
             <div className="ticket-section-title"><h2>Conversa</h2><ReplyBadge ticket={ticket} showUnread={false} /></div>
+            {data.events.length > 0 && <ol aria-label="Histórico do chamado em ordem cronológica">{data.events.map((item) => <li key={item.id} data-kind={item.kind}>
+              <span className="history-icon"><Icon name={item.kind === "note" || item.kind === "system" ? "shield" : item.kind === "comment" ? "chat" : "clock"} /></span>
+              <div className="ticket-history-entry">
+                <div className="event-meta"><b>{item.author}</b><time dateTime={item.createdAt}>{formatDate(item.createdAt)}</time>{(item.kind === "note" || item.kind === "system") && <span className="note-label">Interno</span>}</div>
+                <p>{item.body}</p>
+              </div>
+            </li>)}</ol>}
+            {data.events.length === 0 && <p className="muted">Nenhuma atualização neste chamado.</p>}
+          </section>
+          {ticket.resolution && <div className="ticket-box ticket-resolved-copy"><h2><Icon name="check" />Solução registrada</h2><p>{ticket.resolution}</p></div>}
+          {participates && <div className="ticket-box ticket-composer" data-internal={internal || undefined}>
             <form className="form-stack comment-form" onSubmit={(event) => {
               event.preventDefault();
               void change("comment", { body: message, internal }).then((saved) => { if (saved) setMessage(""); });
@@ -208,10 +219,6 @@ export function TicketWorkspace({ id, initial, user, team, departments, template
             </form>
           </div>}
           {!participates && <div className="ticket-box copy-readonly"><Icon name="people" /><p>Você acompanha este chamado em cópia, com acesso de leitura.</p></div>}
-          <section className="history ticket-history"><div className="ticket-section-title"><h2>Histórico</h2>{!participates && <ReplyBadge ticket={ticket} showUnread={false} />}</div><ol aria-label="Eventos mais recentes primeiro">{[...data.events].reverse().map((item) => <li key={item.id} data-kind={item.kind}>
-            <span className="history-icon"><Icon name={item.kind === "note" || item.kind === "system" ? "shield" : item.kind === "comment" ? "chat" : "clock"} /></span>
-            <div><div className="event-meta"><b>{item.author}</b><time dateTime={item.createdAt}>{formatDate(item.createdAt)}</time>{(item.kind === "note" || item.kind === "system") && <span className="note-label">Interno</span>}</div><p>{item.body}</p></div>
-          </li>)}</ol></section>
         </section>
         {finished && !staff && participates && <section className="panel ticket-box"><h2>Avaliação do atendimento</h2>
           {ticket.rating !== null ? <p>Nota registrada: <b>{ticket.rating}/5</b></p> :
@@ -229,6 +236,9 @@ export function TicketWorkspace({ id, initial, user, team, departments, template
         </section>}
       </div>
       <aside className="ticket-sidebar" aria-label="Informações do chamado">
+        <button type="button" className="button outline ticket-sidebar-toggle" aria-expanded={showDetails} aria-controls="ticket-sidebar-details"
+          onClick={() => setShowDetails((visible) => !visible)}>Informações do chamado<Icon name="down" /></button>
+        <div className="panel ticket-sidebar-content" id="ticket-sidebar-details" data-expanded={showDetails || undefined}>
         <section className="panel ticket-box">
           <h2>Cliente</h2>
           <div className="ticket-contact-name"><Avatar person={{ name: ticket.requester }} /><strong>{ticket.requester}</strong></div>
@@ -284,6 +294,7 @@ export function TicketWorkspace({ id, initial, user, team, departments, template
         {data.attachments.length > 0 && <section className="panel ticket-box"><h2>Anexos</h2><ul className="attachment-list">
           {data.attachments.map((item) => <li key={item.id}><a href={`/api/helpdesk?id=${id}&attachment=${item.id}`} download><Icon name="clip" />{item.name}</a></li>)}
         </ul></section>}
+        </div>
       </aside>
     </div>}
   </article>;

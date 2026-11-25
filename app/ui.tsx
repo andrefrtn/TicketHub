@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type AnchorHTMLAttributes, type FormEvent } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type AnchorHTMLAttributes, type FormEvent, type ReactNode } from "react";
 import { categories, isFinished, isOverdue, priorities, roleNames, roles, ticketCode, ticketHref, type Customer, type Organization, type Person, type Role, type Snapshot, type Ticket } from "@/lib/model";
 import { AccountStatus, AuditPanel, DepartmentPanel, KnowledgePanel, PasswordDialog, RecoveryDialog, ReportsPanel, SlaPanel, TemplatesPanel } from "./operations";
 import { CustomerDialog, OrganizationDialog, StaffTicketForm } from "./staff-forms";
@@ -25,7 +25,7 @@ const queueTabs: Record<Filter, { label: string; match: (ticket: Ticket, userId:
 };
 const navigation: { id: Exclude<View, ManagementView>; icon: IconName; title: string }[] = [
   { id: "overview", icon: "grid", title: "Visão geral" },
-  { id: "tickets", icon: "logo", title: "Chamados" },
+  { id: "tickets", icon: "ticket", title: "Chamados" },
   { id: "assistant", icon: "bot", title: "Assistente IA" },
   { id: "knowledge", icon: "inbox", title: "Base de conhecimento" },
 ];
@@ -87,15 +87,13 @@ export function Login({ demo }: { demo: boolean }) {
     {recovering && <RecoveryDialog onClose={() => setRecovering(false)} />}
     <section className="login-feature" aria-label="Abertura de chamados pelo assistente">
       <div className="login-feature-content">
-        <div className="login-conversation"><Icon name="chat" /> A VPN cai sempre que entro em uma reunião</div>
-        <div className="login-connector" aria-hidden="true" />
-        <div className="login-receipt">
-          <div className="receipt-top"><span className="ticket-code">TH-0001</span><Tag value="Aberto" /></div>
-          <b>VPN desconecta durante reuniões</b>
-          <div className="receipt-bottom"><span>Rede · Prioridade alta</span><Icon name="check" /></div>
-        </div>
-        <h2>Do relato<br />ao chamado.</h2>
-        <p>Descreva o problema e acompanhe a resolução em um só lugar.</p>
+        <h2>Do relato<br />ao chamado</h2>
+        <figure className="login-demo">
+          <figcaption>Exemplo de atendimento</figcaption>
+          <div className="login-conversation"><Icon name="chat" />A VPN cai sempre que entro em uma reunião</div>
+          <div className="login-connector" aria-hidden="true" />
+          <TicketReceipt className="login-receipt" ticket={{ id: 1, status: "Aberto", title: "VPN desconecta durante reuniões", category: "Rede", priority: "Alta" }} />
+        </figure>
       </div>
     </section>
   </main>;
@@ -255,7 +253,9 @@ export function Hub({ initial, initialView = "overview" }: { initial: Snapshot; 
     };
   }, [screen, mainTab, filter, queueSelection]);
 
-  const critical = data.tickets.find((ticket) => ticket.priority === "Urgente" && !["Resolvido", "Fechado"].includes(ticket.status));
+  const critical = data.tickets.find((ticket) => ticket.priority === "Urgente" && !isFinished(ticket.status));
+  const attention = view === "overview" ? overviewAttention(data.tickets, critical?.id, !customer) : [];
+  const featured = critical ?? attention[0]?.ticket;
   const resolved = data.tickets.filter((ticket) => customer ? isFinished(ticket.status) : ticket.status === "Resolvido").length;
   const openCount = data.tickets.filter((ticket) => !isFinished(ticket.status)).length;
   const unreadCount = data.tickets.filter((ticket) => ticket.unreadReply && (!customer || !isFinished(ticket.status))).length;
@@ -334,19 +334,24 @@ export function Hub({ initial, initialView = "overview" }: { initial: Snapshot; 
         </header>
         {shellError && <p className="error" role="alert">{shellError}</p>}
         {flash && <div className="flash" role="status"><Icon name="check" />{flash}<button className="icon-button" aria-label="Dispensar aviso" onClick={() => setFlash("")}><Icon name="close" /></button></div>}
-        {view === "overview" && <section className="overview-metrics" aria-label="Resumo dos chamados">
-          <OverviewMetric label="Em aberto" value={openCount} icon="inbox" selected={filter === "open" && statusFilter === ""}
-            onClick={() => selectQueueTab("open")} />
-          <OverviewMetric label="Novas respostas" value={unreadCount} icon="chat" detail={customer ? "Em chamados abertos" : undefined}
-            selected={filter === unreadTab && statusFilter === "unread"} onClick={() => selectQueueTab(unreadTab, "unread")} />
-          <OverviewMetric label={customer ? "Finalizados" : "Resolvidos"} value={resolved} icon="check"
-            selected={filter === resolvedTab && statusFilter === resolvedStatus} onClick={() => selectQueueTab(resolvedTab, resolvedStatus)} />
-        </section>}
+        {view === "overview" && featured && <TicketLink id={featured.id} onOpen={openTicket} className="overview-mobile-alert">
+          <Icon name={critical || attention[0]?.kind === "overdue" ? "alert" : "chat"} />
+          <span><small>{critical ? "Prioridade crítica" : attentionLabel(attention[0].kind)}</small><strong>{featured.title}</strong></span>
+          <Icon name="chevron" />
+        </TicketLink>}
         {(view === "overview" || view === "tickets") && (
           <div className={view === "overview" ? "overview-content" : undefined}>
           <section className="queue" aria-label="Fila de chamados">
             {view === "overview" && <div className="queue-heading">
               <h2>{customer ? "Meus chamados" : "Fila de chamados"}</h2>
+            </div>}
+            {view === "overview" && <div className="overview-metrics" role="group" aria-label="Filtros rápidos">
+              <OverviewMetric label="Em aberto" value={openCount} selected={filter === "open" && statusFilter === ""}
+                onClick={() => selectQueueTab("open")} />
+              <OverviewMetric label="Novas respostas" value={unreadCount} detail={customer ? "Em chamados abertos" : undefined}
+                selected={filter === unreadTab && statusFilter === "unread"} onClick={() => selectQueueTab(unreadTab, "unread")} />
+              <OverviewMetric label={customer ? "Finalizados" : "Resolvidos"} value={resolved}
+                selected={filter === resolvedTab && statusFilter === resolvedStatus} onClick={() => selectQueueTab(resolvedTab, resolvedStatus)} />
             </div>}
             <div className="queue-filters" ref={queueTabsElement} role="group" aria-label="Filtrar chamados">
               {visibleTabs.map((tab) => <button key={tab} aria-pressed={filter === tab} onClick={() => selectQueueTab(tab)}>{customer && tab === "open" ? "Em aberto" : queueTabs[tab].label}<small>{data.tickets.filter((ticket) => queueTabs[tab].match(ticket, data.user.id)).length}</small>{filter === tab && <span className="queue-tab-marker" aria-hidden="true" />}</button>)}
@@ -364,7 +369,7 @@ export function Hub({ initial, initialView = "overview" }: { initial: Snapshot; 
               {lastPage > 0 && <div><button className="button outline" disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)}>Anterior</button><span>{currentPage + 1} de {lastPage + 1}</span><button className="button outline" disabled={currentPage === lastPage} onClick={() => setPage(currentPage + 1)}>Próxima</button></div>}
             </div>
           </section>
-          {view === "overview" && <OverviewAside tickets={data.tickets} critical={critical} staff={!customer} onOpen={openTicket}
+          {view === "overview" && <OverviewAside attention={attention} critical={critical} featuredId={featured?.id} onOpen={openTicket}
             onAssistant={data.aiConfigured || data.demo ? () => navigate("assistant") : undefined} />}
           </div>
         )}
@@ -413,29 +418,45 @@ function TicketLink({ id, onOpen, ...props }: Omit<AnchorHTMLAttributes<HTMLAnch
   }} />;
 }
 
-function OverviewMetric({ label, value, icon, detail, selected, onClick }: {
-  label: string; value: number; icon: IconName; detail?: string; selected: boolean; onClick: () => void;
+function TicketReceipt({ ticket, className, children }: {
+  ticket: Pick<Ticket, "id" | "status" | "title" | "category" | "priority">; className: string; children?: ReactNode;
 }) {
-  return <button type="button" className="overview-metric" aria-pressed={selected} aria-controls="queue-results" onClick={onClick}>
-    <span className="overview-metric-icon"><Icon name={icon} /></span>
-    <strong>{value}</strong>
+  return <div className={`ticket-receipt ${className}`}>
+    <div className="receipt-top">
+      <span className="chat-receipt-confirmation"><Icon name="check" />Chamado registrado</span>
+      <Tag value={ticket.status} />
+    </div>
+    <div className="receipt-main"><span className="ticket-code">{ticketCode(ticket.id)}</span><b>{ticket.title}</b></div>
+    <div className="receipt-bottom"><span>{ticket.category} · Prioridade {ticket.priority.toLowerCase()}</span>{children}</div>
+  </div>;
+}
+
+function OverviewMetric({ label, value, detail, selected, onClick }: {
+  label: string; value: number; detail?: string; selected: boolean; onClick: () => void;
+}) {
+  return <button type="button" className="overview-metric" aria-pressed={selected} aria-controls="queue-results" title={detail} onClick={onClick}>
     <span className="overview-metric-label">{label}</span>
-    {detail && <small>{detail}</small>}
-    {selected && <Icon name="check" />}
+    <strong>{value}</strong>
   </button>;
 }
 
-function OverviewAside({ tickets, critical, staff, onOpen, onAssistant }: {
-  tickets: Ticket[]; critical?: Ticket; staff: boolean; onOpen: (id: number) => void; onAssistant?: () => void;
-}) {
-  const attention = tickets.flatMap<{ ticket: Ticket; kind: "overdue" | "unread" }>((ticket) => {
-    if (ticket.id === critical?.id) return [];
+type AttentionItem = { ticket: Ticket; kind: "overdue" | "unread" };
+const attentionLabel = (kind: AttentionItem["kind"]) => kind === "overdue" ? "SLA vencido" : "Nova resposta";
+
+function overviewAttention(tickets: Ticket[], criticalId: number | undefined, staff: boolean) {
+  return tickets.flatMap<AttentionItem>((ticket) => {
+    if (ticket.id === criticalId) return [];
     if (staff && isOverdue(ticket)) return [{ ticket, kind: "overdue" }];
     return ticket.unreadReply ? [{ ticket, kind: "unread" }] : [];
-  }).sort((a, b) => Number(b.kind === "overdue") - Number(a.kind === "overdue")).slice(0, critical ? 2 : 3);
+  }).sort((a, b) => Number(b.kind === "overdue") - Number(a.kind === "overdue")).slice(0, criticalId ? 2 : 3);
+}
 
+function OverviewAside({ attention, critical, featuredId, onOpen, onAssistant }: {
+  attention: AttentionItem[]; critical?: Ticket; featuredId?: number; onOpen: (id: number) => void; onAssistant?: () => void;
+}) {
   return <aside className="overview-aside" aria-label="Atalhos de atendimento">
-    <section className="panel overview-attention">
+    <section className="panel overview-attention" data-critical={Boolean(critical) || undefined}
+      data-mobile-hidden={Boolean(featuredId) && attention.length + Number(Boolean(critical)) === 1 || undefined}>
       <h2>Precisa de atenção</h2>
       {critical && <div className="overview-critical">
         <span><Icon name="alert" />Prioridade crítica</span>
@@ -443,10 +464,10 @@ function OverviewAside({ tickets, critical, staff, onOpen, onAssistant }: {
         <TicketLink id={critical.id} onOpen={onOpen} className="overview-critical-link">Abrir chamado<Icon name="arrow" /></TicketLink>
       </div>}
       {attention.length > 0 && <ul aria-label="Chamados em destaque">
-        {attention.map(({ ticket, kind }) => <li key={ticket.id}>
+        {attention.map(({ ticket, kind }) => <li key={ticket.id} data-featured={ticket.id === featuredId || undefined}>
           <TicketLink id={ticket.id} onOpen={onOpen} className="overview-alert-link">
             <span className="overview-alert-icon" data-kind={kind}><Icon name={kind === "overdue" ? "clock" : "chat"} /></span>
-            <span><strong>{ticket.title}</strong><small>{ticketCode(ticket.id)} · {kind === "overdue" ? "SLA vencido" : "Nova resposta"}</small></span>
+            <span><strong>{ticket.title}</strong><small>{ticketCode(ticket.id)} · {attentionLabel(kind)}</small></span>
             <Icon name="chevron" />
           </TicketLink>
         </li>)}
@@ -556,6 +577,39 @@ function PersonDialog({ onClose, onDone }: { onClose: () => void; onDone: () => 
 
 type Message = { id: number; author: "assistant" | "me"; text?: string; ticket?: Ticket };
 const beginning: Message[] = [{ id: 0, author: "assistant", text: "O que aconteceu? Conte qual sistema ou equipamento foi afetado e o que você estava tentando fazer." }];
+const assistantPhases = {
+  waiting: { label: "Aguardando seu relato", step: 0 },
+  processing: { label: "Entendendo o relato", step: 1 },
+  clarifying: { label: "Aguardando mais detalhes", step: 1 },
+  created: { label: "Chamado registrado", step: 2 },
+  unavailable: { label: "Indisponível", step: -1 },
+} as const;
+
+function AssistantHeader({ phase, modeLabel, busy, onReset }: {
+  phase: keyof typeof assistantPhases; modeLabel?: string; busy: boolean; onReset?: () => void;
+}) {
+  const { label, step } = assistantPhases[phase];
+  return <header className="chat-header" data-phase={phase}>
+    <div className="assistant-header-main">
+      <div className="assistant-mascot" aria-hidden="true">
+        <Icon name="capybara" />
+        <span className="assistant-indicator">
+          {phase === "created" ? <Icon name="check" /> : <span className="assistant-indicator-dot" />}
+        </span>
+      </div>
+      <div className="assistant-header-copy">
+        <h2>Assistente IA</h2>
+        {modeLabel && <small>{modeLabel}</small>}
+        <span className="assistant-status" role="status">{label}</span>
+      </div>
+      {onReset && <button className="button outline" disabled={busy} onClick={onReset}>Nova conversa</button>}
+    </div>
+    <ol className="assistant-steps" role="list" aria-label="Etapas da triagem">
+      {["Relato", "Triagem", "Chamado"].map((name, index) => <li key={name} aria-current={step === index ? "step" : undefined}
+        data-done={step > index || undefined}>{name}</li>)}
+    </ol>
+  </header>;
+}
 
 function Assistant({ snapshot, onOpen, refresh }: { snapshot: Snapshot; onOpen: (id: number) => void; refresh: () => Promise<void> }) {
   const [messages, setMessages] = useState(beginning);
@@ -567,6 +621,12 @@ function Assistant({ snapshot, onOpen, refresh }: { snapshot: Snapshot; onOpen: 
   const sequence = useRef(0);
   const area = useRef<HTMLDivElement>(null);
   const enabled = snapshot.aiConfigured || snapshot.demo;
+  const modeLabel = snapshot.aiProvider === "ollama" ? "Modelo local"
+    : snapshot.aiProvider === "groq" ? "GroqCloud"
+      : !snapshot.aiConfigured && snapshot.demo ? "Triagem simulada" : undefined;
+  const latest = messages.at(-1);
+  const processing = busy && latest?.author === "me";
+  const phase = !enabled ? "unavailable" : processing ? "processing" : latest?.ticket ? "created" : context ? "clarifying" : "waiting";
 
   useEffect(() => {
     if (area.current) area.current.scrollTop = area.current.scrollHeight;
@@ -576,7 +636,7 @@ function Assistant({ snapshot, onOpen, refresh }: { snapshot: Snapshot; onOpen: 
     event.preventDefault();
     const inputText = input.trim();
     const report = context ? `${context}\n${inputText}` : inputText;
-    if (!inputText || busy) return;
+    if (!enabled || !inputText || busy) return;
     if (report.length > 3000) {
       setError("O relato completo precisa ter até 3.000 caracteres. Você pode iniciar outra conversa.");
       return;
@@ -610,20 +670,22 @@ function Assistant({ snapshot, onOpen, refresh }: { snapshot: Snapshot; onOpen: 
 
   return <div className="assistant-layout">
     <section className="panel chat-panel" aria-label="Conversa com o assistente">
-      <div className="chat-header"><span className="chat-mark"><Icon name="chat" /></span><div><b>Assistente TicketHub</b><small>{snapshot.aiConfigured ? "Triagem com IA" : snapshot.demo ? "Triagem simulada" : "Indisponível"}</small></div>
-        {messages.length > 1 && <button className="button outline" disabled={busy} onClick={() => { setMessages(beginning); setContext(""); setInput(""); setError(""); request.current = null; }}>Nova conversa</button>}</div>
+      <AssistantHeader phase={phase} modeLabel={modeLabel} busy={busy} onReset={messages.length > 1 ? () => {
+        setMessages(beginning);
+        setContext("");
+        setInput("");
+        setError("");
+        request.current = null;
+      } : undefined} />
       <div className="messages" ref={area} role="log" aria-label="Mensagens">
         {messages.map((message) => <div className={`message ${message.author}`} key={message.id}>
-          <small>{message.author === "assistant" ? "Assistente" : "Você"}</small>
+          <small>{message.author === "assistant" ? <><Icon name="capybara" />Assistente IA</> : "Você"}</small>
           {message.text && <p>{message.text}</p>}
-          {message.ticket && <div className="chat-receipt">
-            <div className="receipt-top"><span className="ticket-code">{ticketCode(message.ticket.id)}</span><Tag value={message.ticket.status} /></div>
-            <div className="chat-receipt-confirmation"><Icon name="check" />Chamado registrado</div>
-            <b>{message.ticket.title}</b><span>{message.ticket.category} · Prioridade {message.ticket.priority.toLowerCase()}</span>
+          {message.ticket && <TicketReceipt className="chat-receipt" ticket={message.ticket}>
             <TicketLink id={message.ticket.id} onOpen={onOpen} className="chat-link">Acompanhar chamado <Icon name="arrow" /></TicketLink>
-          </div>}
+          </TicketReceipt>}
         </div>)}
-        {busy && <div className="message assistant"><small>Assistente</small><p>Organizando seu relato…</p></div>}
+        {processing && <div className="assistant-typing" aria-hidden="true"><span /><span /><span /></div>}
       </div>
       <form className="composer" onSubmit={submit}>
         {error && <p className="error" role="alert">{error}</p>}

@@ -62,7 +62,8 @@ export type ReplyTemplate = { id: number; title: string; body: string };
 export type SlaPolicy = { priority: Priority; responseMinutes: number; resolutionMinutes: number };
 export type Snapshot = {
   user: Person; tickets: Ticket[]; team: Person[]; people: Person[]; customers: Customer[]; organizations: Organization[];
-  departments: Department[]; articles: Article[]; templates: ReplyTemplate[]; policies: SlaPolicy[]; aiConfigured: boolean; demo: boolean;
+  departments: Department[]; articles: Article[]; templates: ReplyTemplate[]; policies: SlaPolicy[];
+  aiConfigured: boolean; aiProvider: "groq" | "ollama" | "openai" | null; demo: boolean;
 };
 
 export function isFinished(status: Status) {
