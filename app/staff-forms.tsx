@@ -4,9 +4,9 @@ import { useRef, useState, type FormEvent } from "react";
 import { attachmentLimits, categories, priorities, type Customer, type Department, type Organization, type Ticket } from "@/lib/model";
 import { api, CopiesField, errorText, Icon, Modal } from "./ui-kit";
 
-export function StaffTicketForm({ customers, organizations, departments, onCancel, onDone, onCustomer }: {
+export function StaffTicketForm({ customers, organizations, departments, onCancel, onDone, onCustomer, onSubmitTicket }: {
   customers: Customer[]; organizations: Organization[]; departments: Department[]; onCancel: () => void;
-  onDone: (ticket: Ticket) => Promise<void>; onCustomer: (customer: Customer) => void;
+  onDone: (ticket: Ticket) => Promise<void>; onCustomer: (customer: Customer) => void; onSubmitTicket: () => void;
 }) {
   const [search, setSearch] = useState("");
   const [requester, setRequester] = useState("");
@@ -31,6 +31,7 @@ export function StaffTicketForm({ customers, organizations, departments, onCance
     for (const file of files) body.append("attachments", file);
     setBusy(true);
     setError("");
+    onSubmitTicket();
     try {
       const { ticket } = await api<{ ticket: Ticket }>(body);
       await onDone(ticket);

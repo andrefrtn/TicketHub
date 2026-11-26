@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { roleNames, type Person, type Ticket } from "@/lib/model";
 
 const icons = {
-  capybara: "M5.2 19.4c0-.9.2-1.8.4-2.5-1.4-.7-2.1-1.9-2.1-3.5 0-2.5 1.4-4.3 3.8-5.7-.9-.7-1.1-1.6-.7-2.3.5-.9 1.5-1.2 2.3-.8.6.3.9.8 1.2 1.5 3.2-.1 6.3.7 8.8 2 1.9 1 2.9 2.2 2.9 3.9 0 3-1.6 4.7-4.1 4.7h-2.2c-1.2 0-1.8.6-2.2 1.5l-.5 1.2z M10.2 6.1c-.1-1.3.6-2.3 1.7-2.3s1.8.9 1.8 2.5 M12.8 9.8h.16 M21.5 11.1h-2.1 M18.2 14.6q1.2.9 2.9.35",
+  capybara: "M5.2 19.4c0-.9.2-1.8.4-2.5-1.4-.7-2.1-1.9-2.1-3.5 0-2.5 1.4-4.3 3.8-5.7-.9-.7-1.1-1.6-.7-2.3.5-.9 1.5-1.2 2.3-.8.6.3.9.8 1.2 1.5 3.2-.1 6.3.7 8.8 2 1.9 1 2.9 2.2 2.9 3.9 0 3-1.6 4.7-4.1 4.7h-2.2c-1.2 0-1.8.6-2.2 1.5l-.5 1.2z M10.2 6.1c-.1-1.3.6-2.3 1.7-2.3s1.8.9 1.8 2.5 M21.5 11.1h-2.1 M18.2 14.6q1.2.9 2.9.35",
   ticket: "M4 9a3 3 0 0 0 0 6v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3a3 3 0 0 0 0-6V6a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1z M13 5v2m0 3v4m0 3v2",
   grid: "M3 3h7v7H3z M14 3h7v7h-7z M3 14h7v7H3z M14 14h7v7h-7z",
   inbox: "M4 4h16l2 11v5H2v-5z M2 15h6l2 2h4l2-2h6",
@@ -35,11 +35,75 @@ const icons = {
 export type IconName = keyof typeof icons;
 
 export function Icon({ name }: { name: IconName }) {
-  return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.65" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={icons[name]} /></svg>;
+  return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.65" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d={icons[name]} />
+    {name === "capybara" && <circle className="capybara-eye" cx="12.88" cy="9.8" r=".9" fill="currentColor" stroke="none" />}
+  </svg>;
 }
 
 export function Brand() {
-  return <div className="brand"><span className="brand-mark"><Icon name="capybara" /></span><span>TicketHub</span></div>;
+  return <div className="brand"><span className="brand-mark"><Icon name="capybara" /></span><span className="brand-name">TicketHub</span></div>;
+}
+
+export function useTicketConfirmation() {
+  const [activeId, setActiveId] = useState<number | null>(null);
+  const lastId = useRef<number | null>(null);
+  const audio = useRef<AudioContext | null>(null);
+
+  useEffect(() => () => {
+    void audio.current?.close().catch(() => {});
+    audio.current = null;
+  }, []);
+
+  function prepare() {
+    if (!window.AudioContext) return;
+    try {
+      const context = audio.current ??= new AudioContext();
+      if (context.state !== "running") void context.resume().catch(() => {});
+    } catch {
+      // Some browsers or device settings disable audio.
+    }
+  }
+
+  function confirm(id: number) {
+    if (lastId.current === id) return;
+    lastId.current = id;
+    setActiveId(id);
+
+    const context = audio.current;
+    if (!context || context.state !== "running" || document.hidden) return;
+    try {
+      const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      const start = context.currentTime + (reducedMotion ? 0 : .67);
+      [262, 330, 392].forEach((frequency, index) => {
+        const when = start + index * .045;
+        const note = context.createOscillator();
+        const volume = context.createGain();
+        note.frequency.value = frequency;
+        volume.gain.setValueAtTime(0, when);
+        volume.gain.linearRampToValueAtTime(.019, when + .018);
+        volume.gain.exponentialRampToValueAtTime(.0001, when + .15);
+        note.connect(volume).connect(context.destination);
+        note.onended = () => { note.disconnect(); volume.disconnect(); };
+        note.start(when);
+        note.stop(when + .16);
+      });
+    } catch {
+      // The confirmation remains visible if audio is unavailable.
+    }
+  }
+
+  const mark = activeId === null ? null : <div key={activeId} className="ticket-confirmation" aria-hidden="true"
+    onAnimationEnd={(event) => {
+      if (event.target === event.currentTarget) setActiveId((id) => id === activeId ? null : id);
+    }}>
+    <span className="brand-mark">
+      <span className="ticket-confirmation-mascot"><Icon name="capybara" /></span>
+      <span className="ticket-confirmation-check"><Icon name="check" /></span>
+    </span>
+  </div>;
+
+  return { prepare, confirm, mark };
 }
 
 export function Avatar({ person }: { person: Pick<Person, "name"> }) {

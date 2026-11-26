@@ -58,6 +58,34 @@ summary::-webkit-details-marker { display: none; }
 .brand { display: flex; align-items: center; gap: 8px; font: 800 20px/1 var(--display); letter-spacing: -.05em; white-space: nowrap; }
 .brand-mark { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 10px; background: var(--green); color: var(--green-ink); }
 .brand-mark svg { width: 24px; height: 24px; }
+.startup-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: none;
+  place-items: center;
+  background: #fff;
+}
+html[data-startup] .startup-screen { display: grid; }
+html[data-startup="redirecting"] .startup-screen .brand { visibility: hidden; }
+html[data-startup="opening"] .startup-screen { animation: startup-exit 170ms var(--ease) both; }
+.startup-screen .brand { flex-direction: column; gap: 20px; font-size: clamp(44px, 7vw, 64px); }
+.startup-screen .brand-mark { width: clamp(104px, 16vw, 132px); height: auto; aspect-ratio: 1; border-radius: 28%; }
+.startup-screen .brand-mark svg { width: 74%; height: 74%; }
+@keyframes startup-exit { to { opacity: 0; visibility: hidden; } }
+.ticket-confirmation { position: fixed; inset: 0; z-index: 15; display: grid; place-items: center; pointer-events: none; animation: ticket-confirmation-exit 160ms var(--ease) 760ms both; }
+.ticket-confirmation .brand-mark {
+  width: clamp(84px, 12vw, 104px);
+  height: auto;
+  aspect-ratio: 1;
+  border-radius: 28%;
+  box-shadow: 0 10px 28px #1B241F30;
+}
+.ticket-confirmation .brand-mark > span { grid-area: 1 / 1; }
+.ticket-confirmation .brand-mark svg { width: clamp(52px, 8vw, 72px); height: auto; }
+.ticket-confirmation-mascot { display: none; }
+.ticket-confirmation-check svg { stroke-width: 2.4; }
+@keyframes ticket-confirmation-exit { to { opacity: 0; visibility: hidden; } }
 .avatar { width: 28px; height: 28px; flex: 0 0 auto; display: inline-grid; place-items: center; border-radius: 50%; background: #eee; color: var(--secondary); font-size: 11px; font-weight: 650; }
 
 .shell { min-height: 100svh; overflow-x: clip; }
@@ -593,6 +621,73 @@ textarea { resize: vertical; }
   :is(.ticket-finalization, .ticket-reopen) .form-actions { flex-wrap: wrap; }
 }
 @media (prefers-reduced-motion: no-preference) {
+  .ticket-confirmation { animation-duration: 240ms; animation-delay: 1530ms; }
+  .ticket-confirmation .brand-mark { animation: ticket-confirmation-appear 240ms var(--ease) both; }
+  .ticket-confirmation-mascot { display: block; animation: ticket-confirmation-mascot 340ms ease-in-out 360ms both; }
+  .ticket-confirmation-check { animation: ticket-confirmation-check 420ms var(--ease) 570ms both; }
+  @keyframes ticket-confirmation-appear {
+    from { opacity: 0; transform: scale(.91); }
+  }
+  @keyframes ticket-confirmation-mascot {
+    70% { opacity: .94; transform: scale(.32); }
+    to { opacity: 0; transform: scale(.13); }
+  }
+  @keyframes ticket-confirmation-check {
+    from { opacity: 0; transform: scale(.18); }
+    to { opacity: 1; transform: none; }
+  }
+  @supports (d: path("M 0 0 L 1 1")) {
+    .ticket-confirmation-check { animation: none; }
+    .ticket-confirmation-check path { animation: ticket-confirmation-morph 420ms var(--ease) 570ms both; }
+    @keyframes ticket-confirmation-morph {
+      from { d: path("M 11.95 12 L 12 12 L 12.05 12"); stroke-width: 4.5; opacity: 0; animation-timing-function: linear; }
+      20% { d: path("M 11.8 12 L 12 12.05 L 12.2 11.9"); stroke-width: 4.2; opacity: 1; }
+      to { d: path("M 5 12 L 9 16 L 19 6"); stroke-width: 2.4; opacity: 1; }
+    }
+  }
+
+  html[data-startup="opening"] .startup-screen { animation-duration: 270ms; animation-delay: 1730ms; }
+  html[data-startup="opening"] .startup-screen :is(.brand-mark, .brand-name) { animation: startup-spring 850ms var(--ease) both; }
+  html[data-startup="opening"] .startup-screen .brand-name { animation-name: startup-spring, startup-stretch; }
+  html[data-startup="opening"] .startup-screen .capybara-eye {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: startup-blink 260ms var(--ease) 1030ms both;
+  }
+  @keyframes startup-spring {
+    from { scale: .9; }
+    43% { scale: 1.085; }
+    69% { scale: .98; }
+    87% { scale: 1.01; }
+    to { scale: 1; }
+  }
+  @keyframes startup-stretch {
+    from { transform: scaleY(1.16); }
+    43% { transform: scaleY(.88); }
+    69% { transform: scaleY(1.04); }
+    87% { transform: scaleY(.985); }
+    to { transform: none; }
+  }
+  @keyframes startup-blink {
+    0%, 100% { transform: none; }
+    42%, 58% { transform: scale(1.35, .13); }
+  }
+
+  html[data-hub-motion] {
+    view-transition-name: none;
+    --hub-enter: translateY(8px);
+    --hub-exit: translateY(-4px);
+  }
+  html[data-hub-motion="forward"] { --hub-enter: translateX(14px); --hub-exit: translateX(-9px); }
+  html[data-hub-motion="back"] { --hub-enter: translateX(-14px); --hub-exit: translateX(9px); }
+  html[data-hub-motion] .hub-content { view-transition-name: hub-content; }
+  ::view-transition { pointer-events: none; }
+  ::view-transition-group(hub-content) { animation: none; }
+  ::view-transition-old(hub-content) { animation: hub-exit 110ms var(--ease) both; mix-blend-mode: normal; }
+  ::view-transition-new(hub-content) { animation: hub-enter 195ms var(--ease) 45ms both; mix-blend-mode: normal; }
+  @keyframes hub-exit { to { transform: var(--hub-exit); opacity: 0; } }
+  @keyframes hub-enter { from { transform: var(--hub-enter); opacity: .04; } to { transform: none; opacity: 1; } }
+
   .chat-header[data-phase="processing"] .assistant-indicator-dot::after { content: ""; position: absolute; inset: -2px; border: 1px solid currentColor; border-radius: 50%; animation: assistant-signal 920ms var(--ease) infinite; }
   .assistant-typing span { animation: assistant-dot 880ms ease-in-out infinite; }
   .assistant-typing span:nth-child(2) { animation-delay: 110ms; }

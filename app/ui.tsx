@@ -7,7 +7,7 @@ import { AccountStatus, AuditPanel, DepartmentPanel, KnowledgePanel, PasswordDia
 import { CustomerDialog, OrganizationDialog, StaffTicketForm } from "./staff-forms";
 import { defaultQueueFilters, QueueControls, type StatusFilter } from "./queue-controls";
 import { TicketWorkspace } from "./ticket-workspace";
-import { api, Avatar, Brand, CopiesField, errorText, formatDate, Icon, Modal, ReplyBadge, Tag, type IconName } from "./ui-kit";
+import { api, Avatar, Brand, CopiesField, errorText, formatDate, Icon, Modal, ReplyBadge, Tag, useTicketConfirmation, type IconName } from "./ui-kit";
 
 type ManagementView = "people" | "customers" | "organizations" | "departments" | "sla" | "templates" | "reports" | "audit";
 type View = "overview" | "tickets" | "assistant" | "knowledge" | ManagementView;
@@ -41,6 +41,15 @@ const management: { id: ManagementView; icon: IconName; title: string }[] = [
 ];
 const roleIcon: Record<Role, IconName> = { admin: "shield", tecnico: "tool", cliente: "user" };
 
+function screenDirection(previous: string, next: string) {
+  const from = navigation.findIndex((item) => item.id === previous);
+  const to = navigation.findIndex((item) => item.id === next);
+  if (from >= 0 && to >= 0) return to > from ? "forward" : "back";
+  if (next.startsWith("ticket-") || next === "new-ticket") return "forward";
+  if (previous.startsWith("ticket-") || previous === "new-ticket") return "back";
+  return "section";
+}
+
 export function Login({ demo }: { demo: boolean }) {
   const [pending, setPending] = useState<string | null>(null);
   const [error, setError] = useState("");
@@ -51,6 +60,11 @@ export function Login({ demo }: { demo: boolean }) {
     setError("");
     try {
       await api(data);
+      const url = new URL(window.location.href);
+      if (url.searchParams.has("entrar")) {
+        url.searchParams.delete("entrar");
+        window.history.replaceState(null, "", url);
+      }
       window.location.reload();
     } catch (reason) {
       setError(errorText(reason));
@@ -113,6 +127,7 @@ export function Hub({ initial, initialView = "overview" }: { initial: Snapshot; 
   const [flash, setFlash] = useState("");
   const [shellError, setShellError] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
+  const confirmation = useTicketConfirmation();
   const snapshotRequest = useRef(0);
   const customer = data.user.role === "cliente";
   const admin = data.user.role === "admin";
@@ -151,9 +166,11 @@ export function Hub({ initial, initialView = "overview" }: { initial: Snapshot; 
   }
 
   function openTicket(id: number) {
-    window.history.pushState(null, "", ticketHref(id));
-    setMenuOpen(false);
-    window.scrollTo(0, 0);
+    changeScreen(`ticket-${id}`, () => {
+      window.history.pushState(null, "", ticketHref(id));
+      setMenuOpen(false);
+      window.scrollTo(0, 0);
+    });
   }
 
   function addCustomer(item: Customer) {
@@ -192,13 +209,55 @@ export function Hub({ initial, initialView = "overview" }: { initial: Snapshot; 
   const lastPage = Math.max(0, Math.ceil(filtered.length / pageSize) - 1);
   const currentPage = Math.min(page, lastPage);
   const screen = ticketId ? `ticket-${ticketId}` : staffCreate ? "new-ticket" : view;
-  const mainTab = navigation.findIndex((item) => item.id === screen);
   const queueSelection = JSON.stringify([filter, currentPage, queueFilter]);
   const main = useRef<HTMLElement>(null);
+  const screenMotion = useRef<{ transition: ViewTransition; next: string; commit?: () => void } | null>(null);
   const queueTabsElement = useRef<HTMLDivElement>(null);
   const queueResults = useRef<HTMLDivElement>(null);
   const markerOrigin = useRef<DOMRect | null>(null);
-  const previousScreen = useRef({ screen, mainTab, filter, queueSelection });
+  const previousScreen = useRef({ screen, filter, queueSelection });
+
+  function changeScreen(next: string, update: () => void) {
+    if (next !== screen && screenMotion.current?.next === next) return;
+
+    const root = document.documentElement;
+    screenMotion.current?.transition.skipTransition();
+    screenMotion.current?.commit?.();
+    screenMotion.current = null;
+    root.removeAttribute("data-hub-motion");
+
+    if (next === screen || !document.startViewTransition || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      update();
+      return;
+    }
+
+    root.setAttribute("data-hub-motion", screenDirection(screen, next));
+    const transition = document.startViewTransition(() => {
+      const current = screenMotion.current;
+      if (current?.transition !== transition) return;
+
+      return new Promise<void>((resolve) => {
+        // Next applies history changes asynchronously. Capture the new view after its React commit.
+        const timer = window.setTimeout(() => {
+          transition.skipTransition();
+          resolve();
+        }, 120);
+        current.commit = () => { window.clearTimeout(timer); resolve(); };
+        update();
+      });
+    });
+    screenMotion.current = { transition, next };
+
+    function clear() {
+      if (screenMotion.current?.transition !== transition) return;
+      screenMotion.current = null;
+      root.removeAttribute("data-hub-motion");
+    }
+
+    void transition.ready.catch(() => {});
+    void transition.updateCallbackDone.catch(() => {});
+    void transition.finished.then(clear, clear);
+  }
 
   function selectQueueTab(tab: Filter, status: StatusFilter = "") {
     markerOrigin.current = tab === filter ? null
@@ -212,20 +271,22 @@ export function Hub({ initial, initialView = "overview" }: { initial: Snapshot; 
     const previous = previousScreen.current;
     const changedScreen = previous.screen !== screen;
     const changedQueue = previous.queueSelection !== queueSelection;
-    previousScreen.current = { screen, mainTab, filter, queueSelection };
+    previousScreen.current = { screen, filter, queueSelection };
     const markerStart = markerOrigin.current;
     markerOrigin.current = null;
+    if (changedScreen && screenMotion.current?.next === screen && screenMotion.current.commit) {
+      screenMotion.current.commit();
+      return;
+    }
     if ((!changedScreen && !changedQueue) || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
 
     const easing = "cubic-bezier(0.22, 1, 0.36, 1)";
     if (changedScreen) {
-      const betweenMainTabs = previous.mainTab >= 0 && mainTab >= 0;
-      const transform = betweenMainTabs
-        ? `translateX(${mainTab > previous.mainTab ? 20 : -20}px)`
-        : "translateY(10px)";
+      const direction = screenDirection(previous.screen, screen);
+      const transform = direction === "section" ? "translateY(8px)" : `translateX(${direction === "forward" ? 14 : -14}px)`;
       const animation = main.current?.animate(
-        [{ opacity: 0.45, transform }, { opacity: 1, transform: "none" }],
-        { duration: betweenMainTabs ? 280 : 240, easing },
+        [{ opacity: 0.38, transform }, { opacity: 1, transform: "none" }],
+        { duration: 240, easing },
       );
       return () => animation?.cancel();
     }
@@ -251,7 +312,7 @@ export function Hub({ initial, initialView = "overview" }: { initial: Snapshot; 
       results?.cancel();
       marker?.cancel();
     };
-  }, [screen, mainTab, filter, queueSelection]);
+  }, [screen, filter, queueSelection]);
 
   const critical = data.tickets.find((ticket) => ticket.priority === "Urgente" && !isFinished(ticket.status));
   const attention = view === "overview" ? overviewAttention(data.tickets, critical?.id, !customer) : [];
@@ -296,7 +357,7 @@ export function Hub({ initial, initialView = "overview" }: { initial: Snapshot; 
       <Brand />
       <nav id="main-navigation" className={menuOpen ? "nav open" : "nav"} aria-label="Navegação principal" onKeyDown={(event) => { if (event.key === "Escape") setMenuOpen(false); }}>
         {navigation.map((item) => (
-          <button key={item.id} aria-current={view === item.id ? "page" : undefined} onClick={() => navigate(item.id)}>
+          <button key={item.id} aria-current={view === item.id ? "page" : undefined} onClick={() => changeScreen(item.id, () => navigate(item.id))}>
             <Icon name={item.icon} /><span>{item.id === "tickets" && customer ? "Meus chamados" : item.title}</span>
             {item.id === "tickets" && <small>{unassigned}</small>}
           </button>
@@ -305,7 +366,7 @@ export function Hub({ initial, initialView = "overview" }: { initial: Snapshot; 
           <div className="dropdown">{manage.map((item) => <button key={item.id} onClick={(event) => {
             const menu = event.currentTarget.closest("details");
             if (menu) menu.open = false;
-            navigate(item.id);
+            changeScreen(item.id, () => navigate(item.id));
           }}><Icon name={item.icon} />{item.title}</button>)}</div>
         </details>}
       </nav>
@@ -319,18 +380,22 @@ export function Hub({ initial, initialView = "overview" }: { initial: Snapshot; 
         }}><Icon name="shield" />Alterar senha</button><button onClick={() => void logout()}><Icon name="logout" />Sair</button></div>
       </details>
     </header>
-      <main className="main" ref={main}>
+      <main className="main hub-content" ref={main}>
         {ticketId && <TicketWorkspace key={ticketId} id={ticketId} user={data.user} team={data.team} departments={data.departments} templates={data.templates}
-          onBack={() => window.history.back()} backLabel={view === "assistant" ? "Voltar ao assistente" : view === "overview" ? "Voltar à visão geral" : "Voltar para chamados"} onUpdate={refresh} />}
-        {staffCreate && <StaffTicketForm customers={data.customers} organizations={data.organizations} departments={data.departments}
-          onCancel={() => setWindow(null)} onCustomer={addCustomer} onDone={(ticket) => {
+          onBack={() => changeScreen(view, () => window.history.back())} backLabel={view === "assistant" ? "Voltar ao assistente" : view === "overview" ? "Voltar à visão geral" : "Voltar para chamados"} onUpdate={refresh} />}
+        {staffCreate && <StaffTicketForm customers={data.customers} organizations={data.organizations} departments={data.departments} onSubmitTicket={confirmation.prepare}
+          onCancel={() => changeScreen(view, () => setWindow(null))} onCustomer={addCustomer} onDone={(ticket) => {
+            confirmation.confirm(ticket.id);
             navigate("tickets");
             return finish(`${ticketCode(ticket.id)} aberto com sucesso`);
           }} />}
         <div className={view === "overview" ? "queue-screen overview-screen" : view === "tickets" ? "queue-screen" : undefined} hidden={staffCreate || Boolean(ticketId)}>
         <header className="page-heading">
           <div><h1>{titles[view]}</h1><p>{descriptions[view]}</p></div>
-          {action && <button className="button primary" onClick={() => setWindow(action.window)}><Icon name="plus" />{action.title}</button>}
+          {action && <button className="button primary" onClick={() => {
+            if (action.window.name === "create" && !customer) changeScreen("new-ticket", () => setWindow(action.window));
+            else setWindow(action.window);
+          }}><Icon name="plus" />{action.title}</button>}
         </header>
         {shellError && <p className="error" role="alert">{shellError}</p>}
         {flash && <div className="flash" role="status"><Icon name="check" />{flash}<button className="icon-button" aria-label="Dispensar aviso" onClick={() => setFlash("")}><Icon name="close" /></button></div>}
@@ -370,10 +435,11 @@ export function Hub({ initial, initialView = "overview" }: { initial: Snapshot; 
             </div>
           </section>
           {view === "overview" && <OverviewAside attention={attention} critical={critical} featuredId={featured?.id} onOpen={openTicket}
-            onAssistant={data.aiConfigured || data.demo ? () => navigate("assistant") : undefined} />}
+            onAssistant={data.aiConfigured || data.demo ? () => changeScreen("assistant", () => navigate("assistant")) : undefined} />}
           </div>
         )}
-        <div hidden={view !== "assistant"}><Assistant snapshot={data} onOpen={openTicket} refresh={refresh} /></div>
+        <div hidden={view !== "assistant"}><Assistant snapshot={data} onOpen={openTicket} refresh={refresh}
+          onSubmitTicket={confirmation.prepare} onTicketCreated={confirmation.confirm} /></div>
         {view === "knowledge" && <KnowledgePanel articles={data.articles} admin={admin} refresh={refresh} />}
         {view === "reports" && !customer && <ReportsPanel data={data} />}
         {view === "departments" && admin && <DepartmentPanel departments={data.departments} team={data.team} refresh={refresh} />}
@@ -397,7 +463,11 @@ export function Hub({ initial, initialView = "overview" }: { initial: Snapshot; 
         </section>}
         </div>
       </main>
-    {activeWindow?.name === "create" && customer && <CreateDialog onClose={() => setWindow(null)} onDone={(ticket) => finish(`${ticketCode(ticket.id)} aberto com sucesso`)} />}
+    {confirmation.mark}
+    {activeWindow?.name === "create" && customer && <CreateDialog onClose={() => setWindow(null)} onSubmitTicket={confirmation.prepare} onDone={(ticket) => {
+      confirmation.confirm(ticket.id);
+      return finish(`${ticketCode(ticket.id)} aberto com sucesso`);
+    }} />}
     {activeWindow?.name === "person" && admin && <PersonDialog onClose={() => setWindow(null)} onDone={() => finish("Conta cadastrada")} />}
     {activeWindow?.name === "customer" && !customer && <CustomerDialog organizations={data.organizations} editing={activeWindow.item} canChangeEmail={admin} onEdited={() => finish("Cliente atualizado")} onClose={() => setWindow(null)} onDone={(item) => {
       addCustomer(item);
@@ -508,18 +578,20 @@ function TicketList({ tickets, staff, filter, onOpen }: { tickets: Ticket[]; sta
   </ul>;
 }
 
-function CreateDialog({ onClose, onDone }: { onClose: () => void; onDone: (ticket: Ticket) => Promise<void> }) {
+function CreateDialog({ onClose, onDone, onSubmitTicket }: { onClose: () => void; onDone: (ticket: Ticket) => Promise<void>; onSubmitTicket: () => void }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const request = useRef<{ fields: string; key: string } | null>(null);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (busy) return;
     const fields = Object.fromEntries(new FormData(event.currentTarget));
     const serialized = JSON.stringify(fields);
     if (request.current?.fields !== serialized) request.current = { fields: serialized, key: crypto.randomUUID() };
     setBusy(true);
     setError("");
+    onSubmitTicket();
     try {
       const { ticket } = await api<{ ticket: Ticket }>({ ...fields, action: "create", key: request.current.key });
       await onDone(ticket);
@@ -611,7 +683,10 @@ function AssistantHeader({ phase, modeLabel, busy, onReset }: {
   </header>;
 }
 
-function Assistant({ snapshot, onOpen, refresh }: { snapshot: Snapshot; onOpen: (id: number) => void; refresh: () => Promise<void> }) {
+function Assistant({ snapshot, onOpen, refresh, onSubmitTicket, onTicketCreated }: {
+  snapshot: Snapshot; onOpen: (id: number) => void; refresh: () => Promise<void>;
+  onSubmitTicket: () => void; onTicketCreated: (id: number) => void;
+}) {
   const [messages, setMessages] = useState(beginning);
   const [input, setInput] = useState("");
   const [context, setContext] = useState("");
@@ -647,6 +722,7 @@ function Assistant({ snapshot, onOpen, refresh }: { snapshot: Snapshot; onOpen: 
     setInput("");
     setBusy(true);
     setError("");
+    onSubmitTicket();
     try {
       const result = await api<{ question: string } | { ticket: Ticket }>({ action: "assistant", report, key: request.current.key });
       const id = ++sequence.current;
@@ -656,6 +732,7 @@ function Assistant({ snapshot, onOpen, refresh }: { snapshot: Snapshot; onOpen: 
       } else {
         setContext("");
         setMessages((items) => [...items, { id, author: "assistant", ticket: result.ticket }]);
+        onTicketCreated(result.ticket.id);
         try { await refresh(); } catch { setError("O chamado foi criado. Recarregue a página para atualizar a fila."); }
       }
       request.current = null;
