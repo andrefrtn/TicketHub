@@ -23,6 +23,7 @@
   --muted: #53635B;
   --action-hover: #25312A;
   --green: #ACCC44;
+  --brand-deep: #014B43;
   --green-ink: #283414;
   --green-hover: #BBD55C;
   --green-soft: #EAF2D4;
@@ -405,26 +406,26 @@ textarea { resize: vertical; }
 
 .assistant-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(220px, 280px); gap: 16px; align-items: start; }
 .chat-panel { display: grid; grid-template-rows: auto minmax(200px, 1fr) auto; height: max(550px, calc(100svh - 220px)); max-height: 760px; }
-.chat-header { padding: 16px; background: #1B2921; color: #F4F6F5; }
+.chat-header { padding: 16px; background: var(--brand-deep); color: #F4F6F5; }
 .assistant-header-main { display: flex; align-items: center; gap: 14px; min-height: 74px; }
 .assistant-header-copy { flex: 1; min-width: 0; }
 .assistant-header-copy h2 { font: 750 21px/1.2 var(--display); letter-spacing: -.025em; }
-.assistant-header-copy small { display: block; color: #CFDAD2; font-size: 12px; line-height: 1.25; }
+.assistant-header-copy small { display: block; color: #CDE4DD; font-size: 12px; line-height: 1.25; }
 .assistant-status { display: block; margin-top: 4px; color: #EEF4E9; font-size: 14px; line-height: 1.2; }
-.chat-header .button { flex: none; min-height: 44px; padding: 4px 10px; border-color: #5F7466; background: transparent; color: #F4F6F5; font-size: 13px; }
-.chat-header .button:hover:not(:disabled) { background: #2F4335; }
+.chat-header .button { flex: none; min-height: 44px; padding: 4px 10px; border-color: #8ABDB3; background: transparent; color: #F4F6F5; font-size: 13px; }
+.chat-header .button:hover:not(:disabled) { background: #145D53; }
 .chat-header :focus-visible { outline-color: var(--green); }
 .assistant-mascot { position: relative; flex: none; display: grid; place-items: center; width: 62px; height: 62px; margin: 0 4px 4px 0; border-radius: 17px; background: var(--green); color: var(--green-ink); }
 .assistant-mascot > svg { width: 42px; height: 42px; }
-.assistant-indicator { position: absolute; right: -4px; bottom: -4px; display: grid; place-items: center; width: 22px; height: 22px; border: 2px solid #1B2921; border-radius: 50%; background: #304737; color: var(--green); }
+.assistant-indicator { position: absolute; right: -4px; bottom: -4px; display: grid; place-items: center; width: 22px; height: 22px; border: 2px solid var(--brand-deep); border-radius: 50%; background: #103D36; color: var(--green); }
 .assistant-indicator-dot { position: relative; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
 .assistant-indicator > svg { width: 13px; height: 13px; stroke-width: 2.4; }
 .chat-header:is([data-phase="waiting"], [data-phase="unavailable"]) .assistant-indicator { color: #BFCDC1; }
 .chat-header[data-phase="clarifying"] .assistant-indicator { color: #E6BB83; }
 .chat-header[data-phase="created"] .assistant-indicator { background: #E4F7B0; color: var(--green-ink); }
-.assistant-steps { display: flex; align-items: center; gap: 8px; margin: 12px 0 0; padding: 8px 0 0; border-top: 1px solid #425649; list-style: none; }
-.assistant-steps li { display: flex; align-items: center; gap: 7px; color: #CED9D0; font-size: 13px; }
-.assistant-steps li:not(:last-child)::after { content: ""; width: clamp(8px, 4vw, 38px); height: 1px; margin-inline: 4px; background: #67806C; }
+.assistant-steps { display: flex; align-items: center; gap: 8px; margin: 12px 0 0; padding: 8px 0 0; border-top: 1px solid #40786F; list-style: none; }
+.assistant-steps li { display: flex; align-items: center; gap: 7px; color: #CDE4DD; font-size: 13px; }
+.assistant-steps li:not(:last-child)::after { content: ""; width: clamp(8px, 4vw, 38px); height: 1px; margin-inline: 4px; background: #8ABDB3; }
 .assistant-steps li[data-done]::after { background-color: var(--green); }
 .assistant-steps li[aria-current="step"] { color: #E4F7B0; font-weight: 750; }
 .assistant-steps li[aria-current="step"]::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background-color: var(--green); }
@@ -473,18 +474,18 @@ textarea { resize: vertical; }
 .demo-roles .button svg { width: 16px; height: 16px; }
 .login-content > .error { margin-top: 12px; }
 .login-footer { font-size: 12px; color: var(--muted); }
-.login-feature { margin: 12px 12px 12px 0; border-radius: 20px; background: var(--ink); color: white; display: grid; place-items: center; padding: 32px; }
+.login-feature { margin: 12px 12px 12px 0; border-radius: 20px; background: var(--brand-deep); color: white; display: grid; place-items: center; padding: 32px; }
 .login-feature-content { width: min(100%, 428px); }
 .login-demo { margin: 28px 0 0; }
-.login-demo figcaption { margin-bottom: 8px; color: #C7D6CC; font-size: 13px; }
-.login-conversation { width: fit-content; display: flex; gap: 8px; align-items: center; padding: 12px; border: 1px solid #47594D; border-radius: 12px; background: #25342B; }
+.login-demo figcaption { margin-bottom: 8px; color: #CDE4DD; font-size: 13px; }
+.login-conversation { width: fit-content; display: flex; gap: 8px; align-items: center; padding: 12px; border: 1px solid #4F8A81; border-radius: 12px; background: #103D36; }
 .login-connector { height: 24px; border-left: 1px dashed #B8CC94; margin-left: 24px; transform-origin: top; }
 .login-receipt { max-width: 365px; padding: 16px; }
 .receipt-bottom { position: relative; display: grid; gap: 6px; border-top: 1px dashed #C8D6AC; padding-top: 8px; color: var(--secondary); font-size: 14px; }
 .receipt-bottom::before, .receipt-bottom::after { content: ""; position: absolute; top: -6px; width: 7px; height: 11px; border: 1px solid #D1E0A8; background: var(--receipt-surround, var(--paper)); }
 .receipt-bottom::before { left: -15px; border-left: 0; border-radius: 0 8px 8px 0; }
 .receipt-bottom::after { right: -15px; border-right: 0; border-radius: 8px 0 0 8px; }
-.login-receipt { --receipt-surround: var(--ink); }
+.login-receipt { --receipt-surround: var(--brand-deep); }
 .login-receipt .receipt-bottom::before { left: -17px; }
 .login-receipt .receipt-bottom::after { right: -17px; }
 .login-feature h2 { font-family: var(--display); font-size: clamp(36px, 5vw, 68px); line-height: .99; letter-spacing: -.04em; font-weight: 800; }
